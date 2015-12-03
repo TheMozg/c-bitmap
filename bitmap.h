@@ -35,9 +35,9 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-  uint8_t R;
-  uint8_t G;
-  uint8_t B;
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
 } bmp_pixel_t;
 #pragma pack(pop)
 
@@ -48,10 +48,13 @@ typedef struct {
 
 bmp_image_t* read_file(const char*);
 int write_file(const char*, const bmp_image_t*);
-uint8_t padding_size(uint32_t width);
+uint8_t padding_size(uint32_t);
 void free_bitmap(bmp_pixel_t**, uint32_t);
 int rotate_image(bmp_image_t*, motion_t);
 bmp_pixel_t** rotate_bitmap(const bmp_pixel_t**,uint32_t, uint32_t,motion_t);
 bmp_pixel_t** create_bitmap(uint32_t, uint32_t);
+uint8_t* serialize_bitmap(const bmp_pixel_t**, uint32_t, uint32_t);
+bmp_pixel_t** deserialize_bitmap(const uint8_t*, uint32_t, uint32_t);
+int validate_header(bmp_header_t);
 
 #endif

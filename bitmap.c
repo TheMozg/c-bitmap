@@ -5,10 +5,7 @@
 bmp_image_t* read_file(const char *filename){
   FILE* fp;
   bmp_image_t* image;
-  uint32_t i;
-  uint8_t padding;
-  uint32_t width;
-  uint32_t height;
+  uint8_t *data = NULL;
 
   image = malloc(sizeof(bmp_image_t));
 
@@ -20,13 +17,7 @@ bmp_image_t* read_file(const char *filename){
     return NULL;
   }
 
-  if ((char)image->header.bfType != 'B' || image->header.bfType >> 8 != 'M')
-  {
-    fclose(fp);
-    return NULL;
-  }
-
-  if (image->header.biBitCount != BIT_DEPTH)
+  if(validate_header(image->header) != SUCCESS)
   {
     fclose(fp);
     return NULL;
@@ -37,39 +28,29 @@ bmp_image_t* read_file(const char *filename){
     return NULL;
   }
 
-  width = image->header.biWidth;
-  height = image->header.biHeight;
-  padding = padding_size(width);
+  data = malloc(image->header.biSizeImage*sizeof(bmp_pixel_t));
 
-  if ((image->bitmap = create_bitmap(height, width)) == NULL) {
+  if (fread(data, sizeof(uint8_t), image->header.biSizeImage, fp) < image->header.biSizeImage)
+  {
+    free(data);
     fclose(fp);
     return NULL;
   }
-  for (i = 0; i < height; i++) {
-    if (fread(image->bitmap[i], sizeof(bmp_pixel_t), width, fp) < width)
-    {
-      free_bitmap(image->bitmap, height);
-      fclose(fp);
-      return NULL;
-    }
-    if(fseek(fp, padding, SEEK_CUR) != 0){
-      free_bitmap(image->bitmap, height);
-      fclose(fp);
-      return NULL;
-    }
-  }
 
+  image->bitmap = deserialize_bitmap(data, image->header.biHeight, image->header.biWidth);
+  free(data);
+
+  if (image->bitmap == NULL) {
+    fclose(fp);
+    return NULL;
+  }
   fclose(fp);
   return image;
 }
 
 int write_file(const char* filename, const bmp_image_t* image){
   FILE* fp;
-  uint32_t i;
-  uint8_t pbuf[4] = {0};
-  uint8_t padding;
-  uint32_t width;
-  uint32_t height;
+  uint8_t *data;
 
   if(image == NULL)
     return GENERIC_ERROR;
@@ -88,23 +69,14 @@ int write_file(const char* filename, const bmp_image_t* image){
     return GENERIC_ERROR;
   }
 
-  width = image->header.biWidth;
-  height = image->header.biHeight;
-  padding = padding_size(width);
+  data = serialize_bitmap((const bmp_pixel_t**)image->bitmap, image->header.biHeight, image->header.biWidth);
 
-  for (i = 0; i < height; i++) {
-    if (fwrite(image->bitmap[i], sizeof(bmp_pixel_t), width, fp) < width)
-    {
-      fclose(fp);
-      return GENERIC_ERROR;
-    }
-    if (fwrite(&pbuf, sizeof(uint8_t), padding, fp) < padding)
-    {
-      fclose(fp);
-      return GENERIC_ERROR;
-    }
+  if (fwrite(data, sizeof(uint8_t), image->header.biSizeImage, fp) < image->header.biSizeImage)
+  {
+    fclose(fp);
+    return GENERIC_ERROR;
   }
-
+  free(data);
   fclose(fp);
   return SUCCESS;
 }
@@ -184,4 +156,43 @@ bmp_pixel_t** create_bitmap(uint32_t height, uint32_t width){
     }
   }
   return bitmap;
+}
+
+uint8_t* serialize_bitmap(const bmp_pixel_t** bitmap, uint32_t height, uint32_t width){
+  uint32_t i;
+  uint32_t padding = padding_size(width);
+  uint32_t twidth = width + padding;
+  uint8_t pbuf[4] = {0};
+  uint8_t* data = malloc(height*width*sizeof(bmp_pixel_t)+height*padding);
+  for (i = 0; i < height; i++) {
+    unsigned long offset = i*twidth*sizeof(bmp_pixel_t);
+    memcpy(data+offset, bitmap[i], width*sizeof(bmp_pixel_t));
+    memcpy(data+offset+width, pbuf, padding);
+  }
+  return data;
+}
+bmp_pixel_t** deserialize_bitmap(const uint8_t* data, uint32_t height, uint32_t width){
+  uint32_t i;
+  uint32_t padding = padding_size(width);
+  uint32_t twidth = width + padding;
+  bmp_pixel_t** bitmap;
+  if ((bitmap = create_bitmap(height, width)) == NULL)
+    return NULL;
+  for (i = 0; i < height; i++) {
+    unsigned long offset = i*twidth*sizeof(bmp_pixel_t);
+    memcpy(bitmap[i], data+offset, width*sizeof(bmp_pixel_t));
+  }
+  return bitmap;
+}
+
+int validate_header(bmp_header_t header){
+  if (header.bfType != 0x4D42)
+  {
+    return GENERIC_ERROR;
+  }
+  if (header.biBitCount != BIT_DEPTH)
+  {
+    return GENERIC_ERROR;
+  }
+  return SUCCESS;
 }
