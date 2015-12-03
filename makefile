@@ -1,13 +1,29 @@
-CC=gcc
-CFLAGS=-ansi -pedantic -Wall -Werror -g
-SOURCES=main.c bitmap.c
-OBJECTS=$(SOURCES:.c=.o)
-EXECUTABLE=app
+TARGET   = app
 
-all: $(SOURCES) $(EXECUTABLE)
+CC       = gcc
+CFLAGS   = -ansi -pedantic -Wall -Werror -MMD
 
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(OBJECTS) -o $@
+LINKER   = gcc -o
+LFLAGS   = -Wall
 
-.cpp.o:
-	$(CC) $(CFLAGS) $< -o $@
+SRCDIR   = src
+OBJDIR   = obj
+BINDIR   = bin
+
+SOURCES  := $(wildcard $(SRCDIR)/*.c)
+HEADERS  := $(wildcard $(SRCDIR)/*.h)
+OBJECTS  := $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+DEPENDS  := $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.d)
+rm       = rm -f
+
+$(BINDIR)/$(TARGET): $(OBJECTS)
+	$(LINKER) $@ $(LFLAGS) $(OBJECTS)
+
+$(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	$(rm) $(OBJECTS)
+	$(rm) $(BINDIR)/$(TARGET)
+
+-include $(DEPENDS)
